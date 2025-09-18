@@ -38,11 +38,6 @@ public class SecurityConfig {
     private JwtAuthenticationFilter jwtAuthenticationFilter;
 
     @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder(12); // Strong hashing with 12 rounds
-    }
-
-    @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
         return config.getAuthenticationManager();
     }
@@ -59,11 +54,14 @@ public class SecurityConfig {
                 )
                 .authorizeHttpRequests(authz -> authz
                         // Public endpoints
-                        .requestMatchers("/api/v1/auth/**",
+                        .requestMatchers(
+                                "/api/v1/auth/**",
                                 "/api/v1/health",
-                                "/swagger-ui/**",
+                                "/swagger-ui.html",        // fixed leading slash
+                                "/swagger-ui/**",          // includes index.html and static resources
                                 "/v3/api-docs/**",
-                                "/actuator/health").permitAll()
+                                "/actuator/health"
+                        ).permitAll()
 
                         // Admin only endpoints
                         .requestMatchers("/api/v1/admin/**",

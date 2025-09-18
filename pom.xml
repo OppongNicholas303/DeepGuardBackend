@@ -187,11 +187,7 @@
             <artifactId>nimbus-jose-jwt</artifactId>
             <version>9.37.3</version> <!-- latest stable -->
         </dependency>
-        <dependency>
-            <groupId>com.vladmihalcea</groupId>
-            <artifactId>hibernate-types-60</artifactId>
-            <version>2.21.1</version>
-        </dependency>
+
 
     </dependencies>
 

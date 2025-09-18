@@ -25,7 +25,7 @@ public class RateLimitingAspect {
     @Autowired
     private RateLimiter apiRateLimiter;
 
-    @Around("@annotation(com.deepguard.annotation.RateLimited)")
+    @Around("@annotation(DeepQuard.DeepGuardBackend.aop.RateLimited)")
     public Object rateLimit(ProceedingJoinPoint joinPoint) throws Throwable {
         HttpServletRequest request = ((ServletRequestAttributes) RequestContextHolder.currentRequestAttributes()).getRequest();
         String clientIp = getClientIpAddress(request);

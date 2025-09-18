@@ -8,8 +8,8 @@ spring:
   # Database Configuration
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/deepguard}
-    username: ${SPRING_DATASOURCE_USERNAME:deepguard}
-    password: ${SPRING_DATASOURCE_PASSWORD:deepguard123}
+    username: ${SPRING_DATASOURCE_USERNAME:root}
+    password: ${SPRING_DATASOURCE_PASSWORD:NicTech23}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 20
@@ -37,15 +37,12 @@ spring:
     show-sql: ${SPRING_JPA_SHOW_SQL:false}
     defer-datasource-initialization: true
 
-  # MongoDB Configuration
+  # Data Configuration (MongoDB & Redis)
   data:
     mongodb:
       uri: ${MONGODB_URI:mongodb://localhost:27017/deepguard-logs}
       auto-index-creation: true
       auto-index-creation-drop-collection: false
-
-  # Redis Configuration
-  data:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
@@ -75,8 +72,8 @@ spring:
   mail:
     host: ${MAIL_HOST:smtp.gmail.com}
     port: ${MAIL_PORT:587}
-    username: ${EMAIL_USERNAME:}
-    password: ${EMAIL_PASSWORD:}
+    username: ${EMAIL_USERNAME:nicholas.oppong2623@gmail.com}
+    password: ${EMAIL_PASSWORD:ireb znzo qreb frbd}
     properties:
       mail:
         smtp:
@@ -101,12 +98,7 @@ spring:
   # SQL Initialization
   sql:
     init:
-      mode: ${SPRING_SQL_INIT_MODE:always}
-      data-locations: classpath:data/sql/init-data.sql
-      schema-locations: classpath:data/sql/schema.sql
-      continue-on-error: false
-      separator: ;
-      encoding: UTF-8
+      mode: never
 
 # Application Configuration
 app:
@@ -252,15 +244,7 @@ resilience4j:
         exponential-backoff-multiplier: 2
         subscribe-for-events: true
 
-# Custom Security Configuration
-security:
-  jwt:
-    private-key-file: ${JWT_PRIVATE_KEY_FILE:classpath:keys/jwt_private.pem}
-    public-key-file: ${JWT_PUBLIC_KEY_FILE:classpath:keys/jwt_public.pem}
-    access-token-validity-mins: ${JWT_ACCESS_TOKEN_VALIDITY:15}
-    refresh-token-validity-days: ${JWT_REFRESH_TOKEN_VALIDITY:30}
-    issuer: ${JWT_ISSUER:deepguard}
-    audience: ${JWT_AUDIENCE:deepguard-users}
+
 
 ---
 # Development Profile
@@ -273,9 +257,6 @@ spring:
     properties:
       hibernate:
         format_sql: true
-  sql:
-    init:
-      mode: always
 logging:
   level:
     com.deepquard: DEBUG

@@ -1,6 +1,7 @@
 package DeepQuard.DeepGuardBackend.controller;
 
 
+import DeepQuard.DeepGuardBackend.aop.RateLimited;
 import DeepQuard.DeepGuardBackend.dto.request.*;
 import DeepQuard.DeepGuardBackend.dto.response.JwtAuthenticationResponse;
 import DeepQuard.DeepGuardBackend.service.auth.AuthService;
@@ -29,6 +30,7 @@ public class AuthController {
     private JwtTokenProvider tokenProvider;
 
     @PostMapping("/login")
+    @RateLimited("auth")
     public ResponseEntity<ApiResponse<JwtAuthenticationResponse>> authenticateUser(
             @Valid @RequestBody LoginRequest loginRequest) {
 

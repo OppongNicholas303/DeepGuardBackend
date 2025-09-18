@@ -56,19 +56,14 @@ public class AuthService {
     public void registerUser(SignUpRequest signUpRequest) {
         logger.info("Registering new user with email: {}", signUpRequest.getEmail());
 
-        // Check if user already exists
         if (userRepository.existsByEmail(signUpRequest.getEmail())) {
             throw new RuntimeException("Email is already registered");
         }
 
-        // Validate role
         String role = signUpRequest.getRole().toUpperCase();
         if (!role.equals("USER") && !role.equals("ADMIN") && !role.equals("ANALYST")) {
-            role = "USER"; // Default to USER if invalid role provided
+            role = "USER";
         }
-
-        // Create new user
-
 
         User user = new User();
         user.setFirstName(signUpRequest.getFirstName());
@@ -79,19 +74,16 @@ public class AuthService {
         user.setStatus(User.UserStatus.valueOf("ACTIVE"));
         user.setEmailVerified(false);
 
-        // Generate email verification token
         String verificationToken = generateSecureToken();
         user.setVerificationToken(verificationToken);
         user.setVerificationTokenExpires(LocalDateTime.now().plusHours(24));
 
         User savedUser = userRepository.save(user);
 
-        // Send verification email
         try {
             emailService.sendVerificationEmail(savedUser.getEmail(), verificationToken);
         } catch (Exception e) {
             logger.error("Failed to send verification email to {}", savedUser.getEmail(), e);
-            // Don't fail registration if email sending fails
         }
 
         logger.info("User registered successfully with ID: {}", savedUser.getId());
@@ -128,21 +120,18 @@ public class AuthService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        // Check if user is still active
-        if (!"ACTIVE".equals(user.getStatus()) || !user.isEmailVerified()) {
+        logger.info("User: {}", user.getStatus());
+        if (!"ACTIVE".equals(user.getStatus().toString()) || !user.isEmailVerified()) {
             throw new RuntimeException("User account is not active");
         }
 
-        // Create new authentication
         UserPrincipal userPrincipal = UserPrincipal.create(user);
         Authentication authentication = new UsernamePasswordAuthenticationToken(
                 userPrincipal, null, userPrincipal.getAuthorities());
 
-        // Generate new tokens
         String newAccessToken = tokenProvider.generateToken(authentication);
         String newRefreshToken = tokenProvider.generateRefreshToken(authentication);
 
-        // Create session record for the new token
         createUserSession(user, newAccessToken, null, null);
 
         logger.info("Token refreshed successfully for user: {}", user.getEmail());
@@ -154,7 +143,6 @@ public class AuthService {
         logger.debug("Updating last login for user: {}", email);
         userRepository.updateLastLoginByEmail(email, LocalDateTime.now());
 
-        // Reset failed login attempts on successful login
         userRepository.updateFailedLoginAttempts(email, 0);
     }
 
@@ -164,14 +152,12 @@ public class AuthService {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found with email: " + email));
 
-        // Generate reset token
         String resetToken = generateSecureToken();
         user.setResetToken(resetToken);
         user.setResetTokenExpires(LocalDateTime.now().plusHours(1)); // 1 hour expiry
 
         userRepository.save(user);
 
-        // Send reset email
         try {
             emailService.sendPasswordResetEmail(user.getEmail(), resetToken);
         } catch (Exception e) {
@@ -188,14 +174,12 @@ public class AuthService {
         User user = userRepository.findByResetTokenAndNotExpired(token, LocalDateTime.now())
                 .orElseThrow(() -> new RuntimeException("Invalid or expired reset token"));
 
-        // Update password
         user.setPasswordHash(passwordEncoder.encode(newPassword));
         user.setResetToken(null);
         user.setResetTokenExpires(null);
 
         userRepository.save(user);
 
-        // Revoke all existing sessions for this user
         userSessionRepository.revokeAllUserTokens(user.getId());
 
         logger.info("Password reset successfully for user: {}", user.getEmail());
@@ -205,10 +189,9 @@ public class AuthService {
         logger.info("Logging out user");
 
         try {
-            // Hash the token to match stored format
+
             String tokenHash = hashToken(token);
 
-            // Revoke the session
             int updated = userSessionRepository.revokeToken(tokenHash);
 
             if (updated == 0) {

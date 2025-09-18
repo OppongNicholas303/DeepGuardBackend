@@ -28,4 +28,8 @@ public interface UserSessionRepository extends JpaRepository<UserSession, UUID> 
     @Modifying
     @Query("DELETE FROM UserSession us WHERE us.expiresAt < :now")
     int deleteExpiredTokens(@Param("now") LocalDateTime now);
+
+    @Query("SELECT CASE WHEN COUNT(us) > 0 THEN true ELSE false END FROM UserSession us WHERE us.tokenHash = :tokenHash AND us.isRevoked = true")
+    boolean isTokenRevoked(@Param("tokenHash") String tokenHash);
+
 }

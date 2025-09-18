@@ -1,5 +1,6 @@
 package DeepQuard.DeepGuardBackend.service.security;
 
+import DeepQuard.DeepGuardBackend.repository.UserSessionRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -12,6 +13,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
+import org.springframework.util.DigestUtils;
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -29,6 +31,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private static final Logger logger = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
 
+    @Autowired
+    private UserSessionRepository userSessionRepository;
+
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
@@ -43,6 +48,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     filterChain.doFilter(request, response);
                     return;
                 }
+
+                // Check if token is revoked
+                String tokenHash = DigestUtils.md5DigestAsHex(jwt.getBytes());
+                if (userSessionRepository.isTokenRevoked(tokenHash)) {
+                    logger.warn("Token has been revoked");
+                    filterChain.doFilter(request, response);
+                    return;
+                }
+
 
                 UUID userId = UUID.fromString(tokenProvider.getUserIdFromToken(jwt));
                 UserDetails userDetails = customUserDetailsService.loadUserById(userId);

@@ -1,6 +1,6 @@
 package DeepQuard.DeepGuardBackend.aop;
 
-import DeepQuard.DeepGuardBackend.dto.request.ApiResponse;
+import DeepQuard.DeepGuardBackend.dto.response.ApiResponse;
 import io.github.resilience4j.ratelimiter.RateLimiter;
 import io.github.resilience4j.ratelimiter.RequestNotPermitted;
 import org.aspectj.lang.ProceedingJoinPoint;

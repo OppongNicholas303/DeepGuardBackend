@@ -1,4 +1,4 @@
-package DeepQuard.DeepGuardBackend.dto.request;
+package DeepQuard.DeepGuardBackend.dto.response;
 
 public class ApiResponse<T> {
     private boolean success;

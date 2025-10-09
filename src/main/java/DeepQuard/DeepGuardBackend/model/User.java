@@ -87,7 +87,6 @@ public class User {
     @Column(name = "locked_until")
     private LocalDateTime lockedUntil;
 
-    // ✅ Custom getter for clarity
     public boolean isEmailVerified() {
         return Boolean.TRUE.equals(this.emailVerified);
     }

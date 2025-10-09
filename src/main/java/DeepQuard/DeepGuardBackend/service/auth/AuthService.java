@@ -190,6 +190,7 @@ public class AuthService {
 
         try {
 
+
             String tokenHash = hashToken(token);
 
             int updated = userSessionRepository.revokeToken(tokenHash);

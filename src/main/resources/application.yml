@@ -93,6 +93,7 @@ spring:
       max-file-size: 100MB
       max-request-size: 100MB
       file-size-threshold: 2KB
+      resolve-lazily: true
       location: ${java.io.tmpdir}
 
   # SQL Initialization
@@ -122,6 +123,11 @@ app:
     model:
       timeout: ${AI_MODEL_TIMEOUT:300000} # 5 minutes
       max-concurrent: ${AI_MODEL_MAX_CONCURRENT:5}
+    together:
+      api-key: ${TOGETHER_AI_API_KEY:your-together-ai-api-key-here}
+      base-url: ${TOGETHER_AI_BASE_URL:https://api.together.xyz/v1}
+      timeout: ${TOGETHER_AI_TIMEOUT:300000}
+      max-concurrent: ${TOGETHER_AI_MAX_CONCURRENT:5}
 
   monitoring:
     breach:
@@ -277,7 +283,60 @@ spring:
   sql:
     init:
       mode: never
+  # Scheduling Configuration
+  task:
+    scheduling:
+      pool:
+        size: 5
+    execution:
+      pool:
+        core-size: 10
+        max-size: 50
+        queue-capacity: 1000
 logging:
   level:
     root: WARN
     com.deepquard: INFO
+
+
+# AI/ML Configuration
+app:
+  ai:
+    together:
+      base-url: ${TOGETHER_AI_BASE_URL:https://api.together.xyz/v1}
+      api-key: ${TOGETHER_AI_API_KEY:}
+      timeout: ${AI_TIMEOUT:300000}
+      max-concurrent: ${AI_MAX_CONCURRENT:5}
+
+    models:
+      ensemble-threshold: ${ENSEMBLE_THRESHOLD:0.7}
+      confidence-weight: ${CONFIDENCE_WEIGHT:0.8}
+
+  breach:
+    hibp:
+      api-key: ${HIBP_API_KEY:}
+      rate-limit: ${HIBP_RATE_LIMIT:1500}
+
+    monitoring:
+      check-interval: ${BREACH_CHECK_INTERVAL:PT5M}
+      batch-size: ${BREACH_BATCH_SIZE:100}
+
+  storage:
+    type: ${STORAGE_TYPE:local} # local or s3
+    local-path: ${LOCAL_STORAGE_PATH:./uploads}
+    s3:
+      bucket: ${S3_BUCKET:}
+      region: ${S3_REGION:us-east-1}
+
+  processing:
+    max-file-size: ${MAX_FILE_SIZE:100MB}
+    allowed-types: ${ALLOWED_TYPES:image/jpeg,image/png,video/mp4,audio/wav}
+    chunk-size: ${CHUNK_SIZE:1048576} # 1MB
+
+# WebSocket Configuration
+websocket:
+  allowed-origins: ${WS_ALLOWED_ORIGINS:http://localhost:3000}
+
+
+
+

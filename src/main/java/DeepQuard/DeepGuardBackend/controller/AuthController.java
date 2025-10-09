@@ -3,6 +3,7 @@ package DeepQuard.DeepGuardBackend.controller;
 
 import DeepQuard.DeepGuardBackend.aop.RateLimited;
 import DeepQuard.DeepGuardBackend.dto.request.*;
+import DeepQuard.DeepGuardBackend.dto.response.ApiResponse;
 import DeepQuard.DeepGuardBackend.dto.response.JwtAuthenticationResponse;
 import DeepQuard.DeepGuardBackend.service.auth.AuthService;
 import DeepQuard.DeepGuardBackend.service.security.JwtTokenProvider;
@@ -55,6 +56,7 @@ public class AuthController {
     }
 
     @PostMapping("/register")
+    @RateLimited("auth")
     public ResponseEntity<ApiResponse<String>> registerUser(@Valid @RequestBody SignUpRequest signUpRequest) {
         try {
             authService.registerUser(signUpRequest);
@@ -87,6 +89,7 @@ public class AuthController {
     }
 
     @PostMapping("/forgot-password")
+    @RateLimited("auth")
     public ResponseEntity<ApiResponse<String>> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
         try {
             authService.initiatePasswordReset(request.getEmail());
@@ -111,7 +114,10 @@ public class AuthController {
     @PreAuthorize("hasRole('USER') or hasRole('ADMIN') or hasRole('ANALYST')")
     public ResponseEntity<ApiResponse<String>> logout(@RequestHeader("Authorization") String token) {
         try {
-            String jwt = token.substring(7); // Remove "Bearer " prefix
+            if (!token.startsWith("Bearer ")) {
+                throw new IllegalArgumentException("Invalid token format");
+            }
+            String jwt = token.substring(7);
             authService.logout(jwt);
             return ResponseEntity.ok(new ApiResponse<>(true, null, "Logged out successfully"));
         } catch (Exception e) {

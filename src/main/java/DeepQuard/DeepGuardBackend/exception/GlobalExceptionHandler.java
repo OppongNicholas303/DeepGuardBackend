@@ -1,6 +1,6 @@
 package DeepQuard.DeepGuardBackend.exception;
 
-import DeepQuard.DeepGuardBackend.dto.request.ApiResponse;
+import DeepQuard.DeepGuardBackend.dto.response.ApiResponse;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.MalformedJwtException;
 import io.jsonwebtoken.security.SecurityException;

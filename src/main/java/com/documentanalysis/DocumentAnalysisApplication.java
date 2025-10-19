@@ -7,9 +7,7 @@ import org.springframework.scheduling.annotation.EnableAsync;
 @SpringBootApplication
 @EnableAsync
 public class DocumentAnalysisApplication {
-
-	public static void main(String[] args) {
-		SpringApplication.run(DocumentAnalysisApplication.class, args);
-	}
-
+    public static void main(String[] args) {
+        SpringApplication.run(DocumentAnalysisApplication.class, args);
+    }
 }

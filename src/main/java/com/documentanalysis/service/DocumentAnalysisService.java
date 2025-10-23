@@ -2,8 +2,10 @@ package com.documentanalysis.service;
 
 import com.documentanalysis.model.AnalysisResult;
 import com.documentanalysis.model.ModuleScore;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import com.documentanalysis.model.GeminiAnalysis;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -13,18 +15,34 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
+import java.util.List;
+import java.util.ArrayList;
 
 @Service
-@RequiredArgsConstructor
-@Slf4j
 public class DocumentAnalysisService {
 
-    private final MetadataAnalysisService metadataAnalysisService;
-    private final ForensicsAnalysisService forensicsAnalysisService;
-    private final VisualAnomalyService visualAnomalyService;
-    private final DeepfakeDetectionService deepfakeDetectionService;
-    private final EnsembleScoringService ensembleScoringService;
-    private final GeminiReasoningService geminiReasoningService;
+    private static final Logger log = LoggerFactory.getLogger(DocumentAnalysisService.class);
+
+    @Autowired
+    private MetadataAnalysisService metadataAnalysisService;
+    
+    @Autowired
+    private ForensicsAnalysisService forensicsAnalysisService;
+    
+    @Autowired
+    private VisualAnomalyService visualAnomalyService;
+    
+    @Autowired
+    private DeepfakeDetectionService deepfakeDetectionService;
+    
+    @Autowired
+    private TextManipulationService textManipulationService;
+    
+    @Autowired
+    private EnsembleScoringService ensembleScoringService;
+    
+    @Autowired
+    private GeminiReasoningService geminiReasoningService;
 
     @Async
     public CompletableFuture<ModuleScore> analyzeMetadata(File file) {
@@ -45,44 +63,60 @@ public class DocumentAnalysisService {
     public CompletableFuture<ModuleScore> analyzeDeepfake(File file) {
         return CompletableFuture.completedFuture(deepfakeDetectionService.analyze(file));
     }
+    
+    @Async
+    public CompletableFuture<ModuleScore> analyzeTextManipulation(File file) {
+        return CompletableFuture.completedFuture(textManipulationService.analyze(file));
+    }
 
     public AnalysisResult analyze(MultipartFile multipartFile) {
         File tempFile = null;
         
         try {
-            // Convert MultipartFile to File for processing
             tempFile = convertToFile(multipartFile);
+            boolean isPdf = isPdfFile(multipartFile);
             
-            log.info("Starting parallel analysis for file: {}", multipartFile.getOriginalFilename());
+            log.info("Starting parallel analysis for file: {} (PDF: {})", multipartFile.getOriginalFilename(), isPdf);
             
-            // Run all 4 modules in parallel
             CompletableFuture<ModuleScore> metaFuture = analyzeMetadata(tempFile);
             CompletableFuture<ModuleScore> forensicsFuture = analyzeForensics(tempFile);
             CompletableFuture<ModuleScore> visualFuture = analyzeVisualAnomalies(tempFile);
             CompletableFuture<ModuleScore> deepfakeFuture = analyzeDeepfake(tempFile);
+            CompletableFuture<ModuleScore> textFuture = analyzeTextManipulation(tempFile);
             
-            // Wait for all 4 to complete (with timeout)
-            CompletableFuture.allOf(metaFuture, forensicsFuture, visualFuture, deepfakeFuture)
+            CompletableFuture.allOf(metaFuture, forensicsFuture, visualFuture, deepfakeFuture, textFuture)
                     .orTimeout(25, java.util.concurrent.TimeUnit.SECONDS)
                     .join();
             
-            // Get results
             ModuleScore metadataScore = metaFuture.get();
             ModuleScore forensicsScore = forensicsFuture.get();
             ModuleScore visualScore = visualFuture.get();
             ModuleScore deepfakeScore = deepfakeFuture.get();
+            ModuleScore textScore = textFuture.get();
             
             log.info("All modules completed. Calculating ensemble score...");
             
-            // Calculate ensemble score
-            AnalysisResult result = ensembleScoringService.calculateEnsembleScore(
-                    metadataScore, forensicsScore, visualScore, deepfakeScore);
+            AnalysisResult result;
+            if (isPdf && textScore.getScore() > 0) {
+                // Use PDF-specific ensemble scoring with text manipulation
+                result = ensembleScoringService.calculatePdfEnsembleScore(
+                        metadataScore, forensicsScore, visualScore, textScore);
+            } else if (isPdf) {
+                // PDF without text manipulation analysis
+                result = ensembleScoringService.calculateEnsembleScore(
+                        metadataScore, forensicsScore, visualScore, deepfakeScore);
+            } else {
+                // Use image-specific ensemble scoring
+                result = ensembleScoringService.calculateEnsembleScore(
+                        metadataScore, forensicsScore, visualScore, deepfakeScore);
+            }
             
-            // Get Gemini AI analysis
             log.info("Sending findings to Gemini AI for reasoning...");
-            result.setGeminiAnalysis(geminiReasoningService.analyzeFindings(result));
+            GeminiAnalysis geminiAnalysis = geminiReasoningService.analyzeFindings(result);
             
-            // Set final verdict based on Gemini + ensemble
+            geminiAnalysis.setAreasOfConcern(extractAreasOfConcern(result));
+            result.setGeminiAnalysis(geminiAnalysis);
+            
             result.setFinalVerdict(determineFinalVerdict(result));
             
             return result;
@@ -91,11 +125,15 @@ public class DocumentAnalysisService {
             log.error("Error during analysis: {}", e.getMessage(), e);
             throw new RuntimeException("Analysis failed: " + e.getMessage(), e);
         } finally {
-            // Clean up temp file
             if (tempFile != null && tempFile.exists()) {
                 tempFile.delete();
             }
         }
+    }
+
+    private boolean isPdfFile(MultipartFile file) {
+        String fileName = file.getOriginalFilename();
+        return fileName != null && fileName.toLowerCase().endsWith(".pdf");
     }
 
     private File convertToFile(MultipartFile multipartFile) throws IOException {
@@ -108,17 +146,27 @@ public class DocumentAnalysisService {
         com.documentanalysis.model.FinalVerdict verdict = new com.documentanalysis.model.FinalVerdict();
         
         double finalScore = result.getEnsembleScore().getFinalScore();
+        double forensicsScore = result.getModuleScores().getForensics().getScore();
         double geminiConfidence = result.getGeminiAnalysis().getGeminiConfidence();
         
-        // Combine ensemble score with Gemini confidence
+        boolean copyMoveDetected = result.getModuleScores().getForensics().getFindings().stream()
+            .anyMatch(finding -> finding.toLowerCase().contains("copy-move"));
+        
+        boolean hasHighSeverityRegions = result.getModuleScores().getForensics().getFlaggedRegions().stream()
+            .anyMatch(region -> "high".equalsIgnoreCase(region.getSeverity())) ||
+            result.getModuleScores().getVisualAnomalies().getFlaggedRegions().stream()
+            .anyMatch(region -> "high".equalsIgnoreCase(region.getSeverity()));
+        
         double combinedConfidence = (result.getEnsembleScore().getConfidence() + geminiConfidence) / 2.0;
         
         verdict.setManipulationConfidence(combinedConfidence);
-        verdict.setManipulated(finalScore >= 50.0);
         
-        if (finalScore >= 75) {
+        boolean isManipulated = finalScore >= 50.0 || forensicsScore > 50.0 || copyMoveDetected || hasHighSeverityRegions;
+        verdict.setManipulated(isManipulated);
+        
+        if (finalScore >= 75 || copyMoveDetected || hasHighSeverityRegions) {
             verdict.setVerdict("HIGHLY LIKELY MANIPULATED");
-        } else if (finalScore >= 50) {
+        } else if (finalScore >= 50 || forensicsScore > 50) {
             verdict.setVerdict("LIKELY MANIPULATED");
         } else {
             verdict.setVerdict("UNLIKELY MANIPULATED");
@@ -131,5 +179,81 @@ public class DocumentAnalysisService {
         ));
         
         return verdict;
+    }
+    
+    private List<com.documentanalysis.model.AreaOfConcern> extractAreasOfConcern(AnalysisResult result) {
+        List<com.documentanalysis.model.AreaOfConcern> areasOfConcern = new ArrayList<>();
+        List<com.documentanalysis.model.FlaggedRegion> allRegions = new ArrayList<>();
+        
+        if (result.getModuleScores().getForensics().getFlaggedRegions() != null) {
+            allRegions.addAll(result.getModuleScores().getForensics().getFlaggedRegions());
+        }
+        if (result.getModuleScores().getVisualAnomalies().getFlaggedRegions() != null) {
+            allRegions.addAll(result.getModuleScores().getVisualAnomalies().getFlaggedRegions());
+        }
+        
+        // Filter to only HIGH and MEDIUM severity regions, limit to 15
+        allRegions.stream()
+            .filter(region -> "high".equalsIgnoreCase(region.getSeverity()) || "medium".equalsIgnoreCase(region.getSeverity()))
+            .sorted((r1, r2) -> {
+                int severity1 = getSeverityWeight(r1.getSeverity());
+                int severity2 = getSeverityWeight(r2.getSeverity());
+                return Integer.compare(severity2, severity1);
+            })
+            .limit(15)
+            .forEach(region -> {
+                com.documentanalysis.model.AreaOfConcern area = new com.documentanalysis.model.AreaOfConcern();
+                area.setArea(getAreaDescription(region.getType()));
+                area.setSeverity(region.getSeverity().toUpperCase());
+                area.setCoordinates(region.getCoordinates());
+                area.setDetails(region.getDetails() != null ? region.getDetails() : getAreaDetails(region.getType(), region.getSeverity()));
+                areasOfConcern.add(area);
+            });
+        
+        return areasOfConcern;
+    }
+    
+    private int getSeverityWeight(String severity) {
+        if (severity == null) return 0;
+        switch (severity.toLowerCase()) {
+            case "high":
+                return 3;
+            case "medium":
+                return 2;
+            case "low":
+                return 1;
+            default:
+                return 0;
+        }
+    }
+    
+    private String getAreaDescription(String type) {
+        switch (type) {
+            case "copy_move_detected":
+                return "Copy-move forgery in detected region";
+            case "ela_anomaly":
+                return "Error Level Analysis anomaly";
+            case "shadow_inconsistency":
+                return "Lighting and shadow direction mismatch";
+            case "color_gradient_anomaly":
+                return "Unnatural color gradient patterns";
+            default:
+                return "Suspicious region detected";
+        }
+    }
+    
+    private String getAreaDetails(String type, String severity) {
+        switch (type) {
+            case "copy_move_detected":
+                return "Two regions match with 85% similarity, indicating content duplication";
+            case "ela_anomaly":
+                return "Compression inconsistencies suggest digital manipulation";
+            case "shadow_inconsistency":
+                return "Light source appears inconsistent with shadow positioning";
+            case "color_gradient_anomaly":
+                return "Color transitions appear artificially enhanced or modified";
+            default:
+                return "Technical analysis indicates potential manipulation";
+        }
     }
 }

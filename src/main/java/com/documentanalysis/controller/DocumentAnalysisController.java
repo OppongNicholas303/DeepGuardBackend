@@ -2,21 +2,25 @@ package com.documentanalysis.controller;
 
 import com.documentanalysis.model.AnalysisResult;
 import com.documentanalysis.service.DocumentAnalysisService;
-import DeepQuard.DeepGuardBackend.util.FileValidationUtil;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import com.documentanalysis.util.FileValidationUtil;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/v1/document-analysis")
-@RequiredArgsConstructor
-@Slf4j
 public class DocumentAnalysisController {
 
-    private final DocumentAnalysisService documentAnalysisService;
-    private final FileValidationUtil fileValidationUtil;
+    private static final Logger log = LoggerFactory.getLogger(DocumentAnalysisController.class);
+
+    @Autowired
+    private DocumentAnalysisService documentAnalysisService;
+    
+    @Autowired
+    private FileValidationUtil fileValidationUtil;
 
     @PostMapping("/analyze")
     public ResponseEntity<AnalysisResult> analyzeDocument(

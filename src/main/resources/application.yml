@@ -2,6 +2,19 @@ server:
   port: 8080
 
 spring:
+  application:
+    name: document-analysis
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/deepguard}
+    username: ${SPRING_DATASOURCE_USERNAME:root}
+    password: ${SPRING_DATASOURCE_PASSWORD:password}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
   servlet:
     multipart:
       max-file-size: 100MB
@@ -17,13 +30,17 @@ spring:
         shutdown:
           await-termination-period: 30s
 
-gemini:
-  api-key: ${GEMINI_API_KEY:your-gemini-api-key}
-  model: gemini-2.0-flash
-  temperature: 0.5
-  max-tokens: 2000
-
 app:
+  jwt:
+    secret: ${JWT_SECRET:your-very-secure-secret-key-that-should-be-at-least-256-bits-long}
+    expiration: 900000
+    refresh-expiration: 86400000
   max-file-size-mb: 100
   supported-formats: jpg,jpeg,png,pdf,webp,bmp
   analysis-timeout-seconds: 30
+
+gemini:
+  api-key: ${GEMINI_API_KEY:AIzaSyAGiJbIG7z1vVE8vlMU_iv-DICH6S59nE0}
+  model: gemini-2.0-flash
+  temperature: 0.5
+  max-tokens: 2000

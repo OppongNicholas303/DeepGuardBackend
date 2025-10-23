@@ -4,20 +4,20 @@ import com.documentanalysis.model.AnalysisResult;
 import com.documentanalysis.model.GeminiAnalysis;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.*;
+import com.documentanalysis.model.GeminiAnalysis;
 
 @Service
-@RequiredArgsConstructor
-@Slf4j
 public class GeminiReasoningService {
 
+    private static final Logger log = LoggerFactory.getLogger(GeminiReasoningService.class);
     private final RestTemplate restTemplate = new RestTemplate();
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -31,6 +31,8 @@ public class GeminiReasoningService {
 
     public GeminiAnalysis analyzeFindings(AnalysisResult analysisResult) {
         try {
+            log.info("Starting Gemini API call with model: {}", geminiModel);
+            
             String prompt = buildForensicPrompt(analysisResult);
             
             Map<String, Object> request = Map.of(
@@ -48,14 +50,17 @@ public class GeminiReasoningService {
 
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
             
-            String url = String.format(GEMINI_API_URL + "?key=%s", geminiModel, geminiApiKey);
+            String url = String.format(GEMINI_API_URL, geminiModel) + "?key=" + geminiApiKey;
+            log.info("Calling Gemini API at: {}", url.replace(geminiApiKey, "***"));
             
             ResponseEntity<Map> response = restTemplate.postForEntity(url, entity, Map.class);
+            log.info("Gemini API response status: {}", response.getStatusCode());
             
             return parseGeminiResponse(response.getBody());
             
         } catch (Exception e) {
-            log.error("Error calling Gemini API: {}", e.getMessage(), e);
+            log.error("Gemini API call failed: {}", e.getMessage());
+            log.error("Full error details:", e);
             return createFallbackAnalysis(analysisResult);
         }
     }
@@ -155,19 +160,8 @@ public class GeminiReasoningService {
                 }
                 analysis.setRecommendations(recommendations);
                 
-                // Parse areas of concern
-                List<com.documentanalysis.model.AreaOfConcern> areasOfConcern = new ArrayList<>();
-                JsonNode areasNode = jsonNode.path("areasOfConcern");
-                if (areasNode.isArray()) {
-                    areasNode.forEach(areaNode -> {
-                        com.documentanalysis.model.AreaOfConcern area = new com.documentanalysis.model.AreaOfConcern();
-                        area.setArea(areaNode.path("area").asText());
-                        area.setSeverity(areaNode.path("severity").asText());
-                        area.setDetails(areaNode.path("details").asText());
-                        areasOfConcern.add(area);
-                    });
-                }
-                analysis.setAreasOfConcern(areasOfConcern);
+                // areasOfConcern will be populated from flaggedRegions in DocumentAnalysisService
+                analysis.setAreasOfConcern(new ArrayList<>());
                 
                 return analysis;
             }
@@ -199,7 +193,7 @@ public class GeminiReasoningService {
             "Consider additional forensic examination",
             "Verify source authenticity"
         ));
-        fallback.setAreasOfConcern(new ArrayList<>());
+        // areasOfConcern will be populated from flaggedRegions in DocumentAnalysisService
         
         return fallback;
     }

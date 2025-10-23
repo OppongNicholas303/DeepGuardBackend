@@ -329,52 +329,80 @@ public class VisualAnomalyService {
     private int analyzeColorGradients(Mat image, List<String> anomalies, List<FlaggedRegion> flaggedRegions) {
         try {
             Mat hsv = new Mat();
-            Imgproc.cvtColor(image, hsv, Imgproc.COLOR_BGR2HSV);
-            
-            List<Mat> hsvChannels = new ArrayList<>();
-            Core.split(hsv, hsvChannels);
-            Mat hueChannel = hsvChannels.get(0);
+            Imgproc.cvtColor(image, hsv, Imgproc.COLOR_BGR2GRAY);
             
             int blockSize = 64;
-            int anomalyCount = 0;
+            List<GradientAnomaly> gradientAnomalies = new ArrayList<>();
             
             for (int y = 0; y < image.rows() - blockSize; y += blockSize/2) {
                 for (int x = 0; x < image.cols() - blockSize; x += blockSize/2) {
                     Rect region = new Rect(x, y, blockSize, blockSize);
-                    Mat block = new Mat(hueChannel, region);
+                    Mat block = new Mat(hsv, region);
                     
                     MatOfDouble mean = new MatOfDouble();
                     MatOfDouble stddev = new MatOfDouble();
                     Core.meanStdDev(block, mean, stddev);
                     
                     double variance = stddev.get(0, 0)[0];
-                    if (variance > 60) {
-                        anomalyCount++;
-                        
-                        if (flaggedRegions.size() < 15) {
-                            FlaggedRegion flagged = new FlaggedRegion();
-                            flagged.setType("color_gradient_anomaly");
-                            flagged.setCoordinates(Map.of(
-                                "x", x, "y", y, "width", blockSize, "height", blockSize
-                            ));
-                            String severity = variance > 80 ? "high" : "medium";
-                            flagged.setSeverity(severity);
-                            flagged.setDetails("Unnatural color gradient detected - variance " + String.format("%.1f", variance) + " exceeds normal range, indicating possible digital manipulation");
-                            flaggedRegions.add(flagged);
-                        }
+                    if (variance > 70 && !isNaturalGradient(block, x, y, image)) {
+                        gradientAnomalies.add(new GradientAnomaly(region, variance));
                     }
                 }
             }
             
-            if (anomalyCount > 0) {
-                anomalies.add(String.format("Color gradient unnatural in %d regions", anomalyCount));
-                return Math.min(25, anomalyCount * 8);
+            // Sort by severity and take top 5
+            gradientAnomalies.sort((a, b) -> Double.compare(b.variance, a.variance));
+            int addedCount = 0;
+            
+            for (GradientAnomaly anomaly : gradientAnomalies) {
+                if (addedCount >= 5 || flaggedRegions.size() >= 15) break;
+                
+                FlaggedRegion flagged = new FlaggedRegion();
+                flagged.setType("color_gradient_anomaly");
+                flagged.setCoordinates(Map.of(
+                    "x", anomaly.region.x, "y", anomaly.region.y, 
+                    "width", anomaly.region.width, "height", anomaly.region.height
+                ));
+                flagged.setSeverity(anomaly.variance > 90 ? "high" : "medium");
+                flagged.setDetails("Artificial color gradient detected - variance " + String.format("%.1f", anomaly.variance) + " indicates possible digital manipulation");
+                flaggedRegions.add(flagged);
+                addedCount++;
+            }
+            
+            if (addedCount > 0) {
+                anomalies.add(String.format("Artificial color gradients detected in %d regions", addedCount));
+                return Math.min(25, addedCount * 5);
             }
             
             return 0;
             
         } catch (Exception e) {
             return 0;
+        }
+    }
+    
+    private boolean isNaturalGradient(Mat block, int x, int y, Mat image) {
+        // Check if gradient is in typical sky region (upper portion)
+        if (y < image.rows() * 0.3) return true;
+        
+        // Check for skin tone gradients (flesh tones)
+        Scalar meanColor = Core.mean(block);
+        double brightness = meanColor.val[0];
+        if (brightness > 120 && brightness < 200) return true;
+        
+        // Check for shadow gradients (darker regions with smooth transitions)
+        if (brightness < 80) return true;
+        
+        return false;
+    }
+    
+    private static class GradientAnomaly {
+        final Rect region;
+        final double variance;
+        
+        GradientAnomaly(Rect region, double variance) {
+            this.region = region;
+            this.variance = variance;
         }
     }
 

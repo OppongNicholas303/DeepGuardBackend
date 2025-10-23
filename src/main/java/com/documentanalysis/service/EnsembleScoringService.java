@@ -17,6 +17,12 @@ public class EnsembleScoringService {
     private static final double IMAGE_FORENSICS_WEIGHT = 0.40;
     private static final double IMAGE_VISUAL_WEIGHT = 0.10;
     private static final double IMAGE_DEEPFAKE_WEIGHT = 0.30;
+    
+    // Reduced metadata weight for screenshots/exports
+    private static final double SCREENSHOT_METADATA_WEIGHT = 0.05;
+    private static final double SCREENSHOT_FORENSICS_WEIGHT = 0.45;
+    private static final double SCREENSHOT_VISUAL_WEIGHT = 0.15;
+    private static final double SCREENSHOT_DEEPFAKE_WEIGHT = 0.35;
 
     // PDF analysis weights (new)
     private static final double PDF_METADATA_WEIGHT = 0.25;
@@ -40,11 +46,22 @@ public class EnsembleScoringService {
         moduleScores.setDeepfakeDetection(deepfakeScore);
         result.setModuleScores(moduleScores);
         
+        // Determine if document is screenshot/export (missing camera metadata)
+        boolean isScreenshotOrExport = isScreenshotOrExport(metadataScore);
+        
         // Calculate weighted ensemble score for images
-        double finalScore = (metadataScore.getScore() * IMAGE_METADATA_WEIGHT) +
-                           (forensicsScore.getScore() * IMAGE_FORENSICS_WEIGHT) +
-                           (visualScore.getScore() * IMAGE_VISUAL_WEIGHT) +
-                           (deepfakeScore.getScore() * IMAGE_DEEPFAKE_WEIGHT);
+        double finalScore;
+        if (isScreenshotOrExport) {
+            finalScore = (metadataScore.getScore() * SCREENSHOT_METADATA_WEIGHT) +
+                        (forensicsScore.getScore() * SCREENSHOT_FORENSICS_WEIGHT) +
+                        (visualScore.getScore() * SCREENSHOT_VISUAL_WEIGHT) +
+                        (deepfakeScore.getScore() * SCREENSHOT_DEEPFAKE_WEIGHT);
+        } else {
+            finalScore = (metadataScore.getScore() * IMAGE_METADATA_WEIGHT) +
+                        (forensicsScore.getScore() * IMAGE_FORENSICS_WEIGHT) +
+                        (visualScore.getScore() * IMAGE_VISUAL_WEIGHT) +
+                        (deepfakeScore.getScore() * IMAGE_DEEPFAKE_WEIGHT);
+        }
         
         // Calculate average confidence
         double avgConfidence = (metadataScore.getConfidence() + 
@@ -121,5 +138,16 @@ public class EnsembleScoringService {
         ensembleScore.setInterpretation(interpretation);
         
         return ensembleScore;
+    }
+    
+    private boolean isScreenshotOrExport(ModuleScore metadataScore) {
+        // Check findings for indicators of screenshots or exported documents
+        return metadataScore.getFindings().stream().anyMatch(finding -> 
+            finding.toLowerCase().contains("missing exif") ||
+            finding.toLowerCase().contains("missing critical metadata") ||
+            finding.toLowerCase().contains("screenshot") ||
+            finding.toLowerCase().contains("export") ||
+            finding.toLowerCase().contains("converted")
+        );
     }
 }

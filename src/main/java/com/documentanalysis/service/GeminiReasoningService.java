@@ -82,9 +82,18 @@ public class GeminiReasoningService {
         result.getModuleScores().getVisualAnomalies().getFindings().forEach(finding -> 
             prompt.append("- ").append(finding).append("\n"));
         
-        prompt.append(String.format("\nDEEPFAKE DETECTION (Score: %.0f/100):\n", result.getModuleScores().getDeepfakeDetection().getScore()));
-        result.getModuleScores().getDeepfakeDetection().getFindings().forEach(finding -> 
-            prompt.append("- ").append(finding).append("\n"));
+        // Add deepfake or text manipulation based on document type
+        if (result.getModuleScores().getDeepfakeDetection() != null) {
+            prompt.append(String.format("\nDEEPFAKE DETECTION (Score: %.0f/100):\n", result.getModuleScores().getDeepfakeDetection().getScore()));
+            result.getModuleScores().getDeepfakeDetection().getFindings().forEach(finding -> 
+                prompt.append("- ").append(finding).append("\n"));
+        }
+        
+        if (result.getModuleScores().getTextManipulation() != null) {
+            prompt.append(String.format("\nTEXT MANIPULATION (Score: %.0f/100):\n", result.getModuleScores().getTextManipulation().getScore()));
+            result.getModuleScores().getTextManipulation().getFindings().forEach(finding -> 
+                prompt.append("- ").append(finding).append("\n"));
+        }
         
         prompt.append(String.format("\nENSEMBLE SCORE: %.1f/100 (%s Risk)\n\n", 
             result.getEnsembleScore().getFinalScore(), 

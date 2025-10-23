@@ -152,21 +152,37 @@ public class DocumentAnalysisService {
         boolean copyMoveDetected = result.getModuleScores().getForensics().getFindings().stream()
             .anyMatch(finding -> finding.toLowerCase().contains("copy-move"));
         
-        boolean hasHighSeverityRegions = result.getModuleScores().getForensics().getFlaggedRegions().stream()
-            .anyMatch(region -> "high".equalsIgnoreCase(region.getSeverity())) ||
-            result.getModuleScores().getVisualAnomalies().getFlaggedRegions().stream()
-            .anyMatch(region -> "high".equalsIgnoreCase(region.getSeverity()));
+        // Count HIGH and MEDIUM severity findings
+        long highSeverityCount = 0;
+        long mediumSeverityCount = 0;
+        
+        if (result.getModuleScores().getForensics().getFlaggedRegions() != null) {
+            highSeverityCount += result.getModuleScores().getForensics().getFlaggedRegions().stream()
+                .mapToLong(region -> "high".equalsIgnoreCase(region.getSeverity()) ? 1 : 0).sum();
+            mediumSeverityCount += result.getModuleScores().getForensics().getFlaggedRegions().stream()
+                .mapToLong(region -> "medium".equalsIgnoreCase(region.getSeverity()) ? 1 : 0).sum();
+        }
+        
+        if (result.getModuleScores().getVisualAnomalies().getFlaggedRegions() != null) {
+            highSeverityCount += result.getModuleScores().getVisualAnomalies().getFlaggedRegions().stream()
+                .mapToLong(region -> "high".equalsIgnoreCase(region.getSeverity()) ? 1 : 0).sum();
+            mediumSeverityCount += result.getModuleScores().getVisualAnomalies().getFlaggedRegions().stream()
+                .mapToLong(region -> "medium".equalsIgnoreCase(region.getSeverity()) ? 1 : 0).sum();
+        }
+        
+        // Require multiple findings: 2+ HIGH OR 1 HIGH + 2+ MEDIUM
+        boolean hasSignificantFindings = (highSeverityCount >= 2) || (highSeverityCount >= 1 && mediumSeverityCount >= 2);
         
         double combinedConfidence = (result.getEnsembleScore().getConfidence() + geminiConfidence) / 2.0;
         
         verdict.setManipulationConfidence(combinedConfidence);
         
-        boolean isManipulated = finalScore >= 50.0 || forensicsScore > 50.0 || copyMoveDetected || hasHighSeverityRegions;
+        boolean isManipulated = finalScore >= 60.0 || forensicsScore > 60.0 || copyMoveDetected || hasSignificantFindings;
         verdict.setManipulated(isManipulated);
         
-        if (finalScore >= 75 || copyMoveDetected || hasHighSeverityRegions) {
+        if (finalScore >= 75 || copyMoveDetected || hasSignificantFindings) {
             verdict.setVerdict("HIGHLY LIKELY MANIPULATED");
-        } else if (finalScore >= 50 || forensicsScore > 50) {
+        } else if (finalScore >= 60 || forensicsScore > 60) {
             verdict.setVerdict("LIKELY MANIPULATED");
         } else {
             verdict.setVerdict("UNLIKELY MANIPULATED");

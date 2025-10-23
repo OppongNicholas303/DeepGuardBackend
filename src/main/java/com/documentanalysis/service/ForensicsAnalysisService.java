@@ -307,20 +307,21 @@ public class ForensicsAnalysisService {
             Mat gray = new Mat();
             Imgproc.cvtColor(image, gray, Imgproc.COLOR_BGR2GRAY);
             
-            ORB orb = ORB.create(500);
-            MatOfKeyPoint keypoints = new MatOfKeyPoint();
-            Mat descriptors = new Mat();
+            int blockSize = 64; // Minimum 64x64 pixels
+            double threshold = 8.0; // Stricter threshold for 92% similarity
+            int minDistance = 100; // Minimum 100 pixels between regions
             
-            orb.detectAndCompute(gray, new Mat(), keypoints, descriptors);
-            
-            int blockSize = 32;
-            for (int y1 = 0; y1 < image.rows() - blockSize; y1 += blockSize) {
-                for (int x1 = 0; x1 < image.cols() - blockSize; x1 += blockSize) {
+            for (int y1 = 0; y1 < image.rows() - blockSize; y1 += blockSize/2) {
+                for (int x1 = 0; x1 < image.cols() - blockSize; x1 += blockSize/2) {
                     Rect region1 = new Rect(x1, y1, blockSize, blockSize);
                     Mat block1 = new Mat(gray, region1);
                     
-                    for (int y2 = y1 + blockSize; y2 < image.rows() - blockSize; y2 += blockSize) {
-                        for (int x2 = 0; x2 < image.cols() - blockSize; x2 += blockSize) {
+                    for (int y2 = 0; y2 < image.rows() - blockSize; y2 += blockSize/2) {
+                        for (int x2 = 0; x2 < image.cols() - blockSize; x2 += blockSize/2) {
+                            // Skip if regions are too close (logos, patterns)
+                            double distance = Math.sqrt(Math.pow(x2-x1, 2) + Math.pow(y2-y1, 2));
+                            if (distance < minDistance) continue;
+                            
                             Rect region2 = new Rect(x2, y2, blockSize, blockSize);
                             Mat block2 = new Mat(gray, region2);
                             
@@ -328,10 +329,10 @@ public class ForensicsAnalysisService {
                             Core.absdiff(block1, block2, diff);
                             Scalar meanDiff = Core.mean(diff);
                             
-                            if (meanDiff.val[0] < 15) {
+                            if (meanDiff.val[0] < threshold) {
                                 copyMoveRegions.add(region1);
                                 copyMoveRegions.add(region2);
-                                return copyMoveRegions;
+                                return copyMoveRegions; // Return first match
                             }
                         }
                     }

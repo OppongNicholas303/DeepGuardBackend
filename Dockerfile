@@ -1,4 +1,4 @@
-FROM maven:3.8.6-openjdk-17-slim AS build
+FROM maven:3.9-openjdk-17-slim AS build
 
 RUN apt-get update && apt-get install -y \
     libopencv-dev \

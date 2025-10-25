@@ -1,4 +1,4 @@
-FROM openjdk:17-jdk-slim
+FROM maven:3.8.6-openjdk-17-slim AS build
 
 RUN apt-get update && apt-get install -y \
     libopencv-dev \
@@ -7,15 +7,23 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 COPY pom.xml .
-COPY mvnw .
-COPY .mvn .mvn
-RUN ./mvnw dependency:go-offline -B
+RUN mvn dependency:go-offline -B
 
 COPY src ./src
-RUN ./mvnw clean package -DskipTests
+RUN mvn clean package -DskipTests
+
+FROM openjdk:17-jre-slim
+
+RUN apt-get update && apt-get install -y \
+    libopencv-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY --from=build /app/target/*.jar app.jar
 
 RUN mkdir -p /app/uploads
 
 EXPOSE 9080
 
-CMD ["java", "-jar", "target/document-analysis-1.0.0.jar"]
+CMD ["java", "-jar", "app.jar"]

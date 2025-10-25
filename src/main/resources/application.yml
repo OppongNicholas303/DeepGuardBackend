@@ -1,5 +1,5 @@
 server:
-  port: 8080
+  port: 9080
 
 spring:
   application:
@@ -29,6 +29,8 @@ spring:
         wait-for-tasks-completion-on-shutdown: true
         shutdown:
           await-termination-period: 30s
+  retry:
+    enabled: true
 
 app:
   jwt:
@@ -40,7 +42,10 @@ app:
   analysis-timeout-seconds: 30
 
 gemini:
+  enabled: true
   api-key: ${GEMINI_API_KEY:AIzaSyAGiJbIG7z1vVE8vlMU_iv-DICH6S59nE0}
   model: gemini-2.0-flash
   temperature: 0.5
   max-tokens: 2000
+  timeout: 30000
+  max-retries: 3

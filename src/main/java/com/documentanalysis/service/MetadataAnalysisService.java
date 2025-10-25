@@ -23,12 +23,6 @@ import java.util.*;
 public class MetadataAnalysisService {
 
     private static final Logger log = LoggerFactory.getLogger(MetadataAnalysisService.class);
-    
-    private final DocumentTypeDetectionService documentTypeService;
-    
-    public MetadataAnalysisService(DocumentTypeDetectionService documentTypeService) {
-        this.documentTypeService = documentTypeService;
-    }
 
     public ModuleScore analyze(File file) {
         List<String> findings = new ArrayList<>();

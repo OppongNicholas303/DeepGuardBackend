@@ -10,12 +10,19 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.client.HttpServerErrorException;
+import org.springframework.retry.annotation.Retryable;
+import org.springframework.retry.annotation.Backoff;
+import org.springframework.retry.annotation.Recover;
 
 import java.util.*;
-import com.documentanalysis.model.GeminiAnalysis;
+import java.time.Duration;
 
 @Service
 public class GeminiReasoningService {
+    
+    @Value("${gemini.enabled:false}")
+    private boolean geminiEnabled;
 
     private static final Logger log = LoggerFactory.getLogger(GeminiReasoningService.class);
     private final RestTemplate restTemplate = new RestTemplate();
@@ -29,9 +36,26 @@ public class GeminiReasoningService {
 
     private static final String GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent";
 
+    @Retryable(
+        retryFor = {HttpServerErrorException.ServiceUnavailable.class, HttpServerErrorException.class},
+        maxAttempts = 3,
+        backoff = @Backoff(delay = 2000, multiplier = 2)
+    )
     public GeminiAnalysis analyzeFindings(AnalysisResult analysisResult) {
         try {
+            // Check if Gemini is enabled
+            if (!geminiEnabled) {
+                log.info("Gemini AI reasoning is disabled, using fallback analysis");
+                return createFallbackAnalysis(analysisResult);
+            }
+            
             log.info("Starting Gemini API call with model: {}", geminiModel);
+            
+            // Check if API key is configured
+            if (geminiApiKey == null || geminiApiKey.trim().isEmpty() || "your-gemini-api-key".equals(geminiApiKey)) {
+                log.warn("Gemini API key not configured, using fallback analysis");
+                return createFallbackAnalysis(analysisResult);
+            }
             
             String prompt = buildForensicPrompt(analysisResult);
             
@@ -58,11 +82,23 @@ public class GeminiReasoningService {
             
             return parseGeminiResponse(response.getBody());
             
+        } catch (HttpServerErrorException.ServiceUnavailable e) {
+            log.warn("Gemini API is overloaded (503), will retry: {}", e.getMessage());
+            throw e; // Let retry mechanism handle this
+        } catch (HttpServerErrorException e) {
+            log.error("Gemini API server error ({}): {}", e.getStatusCode(), e.getMessage());
+            throw e; // Let retry mechanism handle this
         } catch (Exception e) {
             log.error("Gemini API call failed: {}", e.getMessage());
-            log.error("Full error details:", e);
+            log.debug("Full error details:", e);
             return createFallbackAnalysis(analysisResult);
         }
+    }
+    
+    @Recover
+    public GeminiAnalysis recoverFromGeminiFailure(Exception e, AnalysisResult analysisResult) {
+        log.error("All Gemini API retry attempts failed, using fallback analysis: {}", e.getMessage());
+        return createFallbackAnalysis(analysisResult);
     }
 
     private String buildForensicPrompt(AnalysisResult result) {
@@ -184,25 +220,70 @@ public class GeminiReasoningService {
     }
 
     private GeminiAnalysis createFallbackAnalysis(AnalysisResult result) {
+        log.info("Creating fallback analysis for document analysis");
+        
         GeminiAnalysis fallback = new GeminiAnalysis();
-        fallback.setExecutiveSummary("Analysis completed using technical forensic methods. Gemini AI analysis unavailable.");
-        fallback.setKeyFindings(List.of(
-            "Technical analysis completed successfully",
-            "Multiple forensic techniques applied",
-            "Results based on established forensic methods"
-        ));
+        
+        // Generate intelligent fallback based on scores
+        String riskLevel = result.getEnsembleScore().getRiskLevel();
+        double score = result.getEnsembleScore().getFinalScore();
+        
+        if (score >= 75) {
+            fallback.setExecutiveSummary("High-risk document detected through technical forensic analysis. Multiple manipulation indicators found across different detection modules.");
+            fallback.setKeyFindings(List.of(
+                "Multiple forensic anomalies detected",
+                "High manipulation probability based on technical analysis",
+                "Recommend immediate verification of document authenticity"
+            ));
+        } else if (score >= 50) {
+            fallback.setExecutiveSummary("Moderate risk detected. Some forensic indicators suggest possible manipulation, requiring further investigation.");
+            fallback.setKeyFindings(List.of(
+                "Some forensic anomalies detected",
+                "Moderate manipulation probability",
+                "Additional verification recommended"
+            ));
+        } else {
+            fallback.setExecutiveSummary("Low risk assessment. Technical forensic analysis shows minimal indicators of manipulation.");
+            fallback.setKeyFindings(List.of(
+                "Minimal forensic anomalies detected",
+                "Low manipulation probability",
+                "Document appears technically authentic"
+            ));
+        }
+        
         fallback.setRiskAssessment(String.format(
-            "Based on ensemble analysis with score %.1f/100, the document shows %s risk of manipulation.",
-            result.getEnsembleScore().getFinalScore(),
-            result.getEnsembleScore().getRiskLevel().toLowerCase()
+            "Technical forensic analysis completed with ensemble score of %.1f/100, indicating %s risk. " +
+            "Analysis based on metadata examination, image forensics, visual anomaly detection, and AI model predictions. " +
+            "Gemini AI reasoning temporarily unavailable.",
+            score, riskLevel.toLowerCase()
         ));
-        fallback.setGeminiConfidence(0.7);
-        fallback.setRecommendations(List.of(
-            "Review technical analysis results",
-            "Consider additional forensic examination",
-            "Verify source authenticity"
-        ));
-        // areasOfConcern will be populated from flaggedRegions in DocumentAnalysisService
+        
+        fallback.setGeminiConfidence(0.75); // High confidence in technical analysis
+        
+        // Generate recommendations based on risk level
+        List<String> recommendations = new ArrayList<>();
+        if (score >= 75) {
+            recommendations.addAll(List.of(
+                "Immediately verify document source and chain of custody",
+                "Conduct additional forensic examination",
+                "Consider document as potentially manipulated until verified"
+            ));
+        } else if (score >= 50) {
+            recommendations.addAll(List.of(
+                "Verify document authenticity through alternative means",
+                "Review flagged regions for manual inspection",
+                "Consider additional forensic tools if available"
+            ));
+        } else {
+            recommendations.addAll(List.of(
+                "Document appears technically sound",
+                "Standard verification procedures sufficient",
+                "Monitor for any additional concerns"
+            ));
+        }
+        
+        fallback.setRecommendations(recommendations);
+        fallback.setAreasOfConcern(new ArrayList<>()); // Will be populated from flaggedRegions
         
         return fallback;
     }

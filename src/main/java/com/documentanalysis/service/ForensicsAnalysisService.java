@@ -307,9 +307,10 @@ public class ForensicsAnalysisService {
             Mat gray = new Mat();
             Imgproc.cvtColor(image, gray, Imgproc.COLOR_BGR2GRAY);
             
-            int blockSize = 64; // Minimum 64x64 pixels
-            double threshold = 8.0; // Stricter threshold for 92% similarity
-            int minDistance = 100; // Minimum 100 pixels between regions
+            // Adaptive parameters based on image size
+            int blockSize = Math.max(32, Math.min(128, image.rows() / 20));
+            double threshold = 12.0; // More conservative threshold
+            int minDistance = blockSize * 3; // Distance relative to block size
             
             for (int y1 = 0; y1 < image.rows() - blockSize; y1 += blockSize/2) {
                 for (int x1 = 0; x1 < image.cols() - blockSize; x1 += blockSize/2) {

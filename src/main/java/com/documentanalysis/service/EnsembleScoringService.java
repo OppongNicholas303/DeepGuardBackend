@@ -46,21 +46,31 @@ public class EnsembleScoringService {
         moduleScores.setDeepfakeDetection(deepfakeScore);
         result.setModuleScores(moduleScores);
         
+        // Adaptive weighting based on confidence levels
+        double totalConfidence = metadataScore.getConfidence() + forensicsScore.getConfidence() + 
+                               visualScore.getConfidence() + deepfakeScore.getConfidence();
+        
+        // Normalize weights by confidence
+        double metaWeight = (metadataScore.getConfidence() / totalConfidence) * IMAGE_METADATA_WEIGHT;
+        double forensicsWeight = (forensicsScore.getConfidence() / totalConfidence) * IMAGE_FORENSICS_WEIGHT;
+        double visualWeight = (visualScore.getConfidence() / totalConfidence) * IMAGE_VISUAL_WEIGHT;
+        double deepfakeWeight = (deepfakeScore.getConfidence() / totalConfidence) * IMAGE_DEEPFAKE_WEIGHT;
+        
         // Determine if document is screenshot/export (missing camera metadata)
         boolean isScreenshotOrExport = isScreenshotOrExport(metadataScore);
         
-        // Calculate weighted ensemble score for images
+        // Calculate confidence-weighted ensemble score
         double finalScore;
         if (isScreenshotOrExport) {
-            finalScore = (metadataScore.getScore() * SCREENSHOT_METADATA_WEIGHT) +
-                        (forensicsScore.getScore() * SCREENSHOT_FORENSICS_WEIGHT) +
-                        (visualScore.getScore() * SCREENSHOT_VISUAL_WEIGHT) +
-                        (deepfakeScore.getScore() * SCREENSHOT_DEEPFAKE_WEIGHT);
+            finalScore = (metadataScore.getScore() * SCREENSHOT_METADATA_WEIGHT * metadataScore.getConfidence()) +
+                        (forensicsScore.getScore() * SCREENSHOT_FORENSICS_WEIGHT * forensicsScore.getConfidence()) +
+                        (visualScore.getScore() * SCREENSHOT_VISUAL_WEIGHT * visualScore.getConfidence()) +
+                        (deepfakeScore.getScore() * SCREENSHOT_DEEPFAKE_WEIGHT * deepfakeScore.getConfidence());
         } else {
-            finalScore = (metadataScore.getScore() * IMAGE_METADATA_WEIGHT) +
-                        (forensicsScore.getScore() * IMAGE_FORENSICS_WEIGHT) +
-                        (visualScore.getScore() * IMAGE_VISUAL_WEIGHT) +
-                        (deepfakeScore.getScore() * IMAGE_DEEPFAKE_WEIGHT);
+            finalScore = (metadataScore.getScore() * metaWeight) +
+                        (forensicsScore.getScore() * forensicsWeight) +
+                        (visualScore.getScore() * visualWeight) +
+                        (deepfakeScore.getScore() * deepfakeWeight);
         }
         
         // Calculate average confidence

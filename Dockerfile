@@ -1,4 +1,4 @@
-FROM maven:3.9-openjdk-17-slim AS build
+FROM maven:3.9-eclipse-temurin-17-alpine AS build
 
 RUN apt-get update && apt-get install -y \
     libopencv-dev \
